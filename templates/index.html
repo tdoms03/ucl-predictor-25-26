@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UCL Simulator 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>body { background-color: #0f172a; color: #f1f5f9; }</style>
+</head>
+<body class="p-6 max-w-7xl mx-auto">
+    <nav class="flex space-x-4 mb-8">
+        <a href="/" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-900/50">
+            League Phase
+        </a>
+        <a href="/knockout" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition">
+            🏆 Knockout & Winner
+        </a>
+    </nav>
+    
+    <h2 class="text-xl font-bold text-gray-400 mb-4">Scenario Probabilities</h2>
+    <div id="insights-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <div class="lg:col-span-2 bg-gray-800 p-6 rounded-xl border border-gray-700">
+            <h2 class="text-2xl font-bold mb-4 text-emerald-400">Predicted Table</h2>
+            <p class="text-sm text-gray-400 mb-4">Click any team to see their point distribution.</p>
+            <div class="overflow-y-auto max-h-[600px]">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-gray-800 shadow-md">
+                        <tr class="text-gray-400 border-b border-gray-600">
+                            <th class="p-3">#</th>
+                            <th class="p-3">Team</th>
+                            <th class="p-3 text-right">Avg Pts</th>
+                            <th class="p-3 text-right">Top 8 %</th>
+                            <th class="p-3 text-right">Top 24 %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="lg:col-span-1">
+            <div class="sticky top-6 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+                <h3 id="selected-team-name" class="text-3xl font-bold text-white mb-2">Select a Team</h3>
+                <p class="text-gray-400 mb-6 text-sm">Point Distribution (0-24 pts)</p>
+                
+                <div class="relative h-64">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+
+                <div class="mt-6 p-4 bg-gray-700 rounded-lg">
+                    <h4 class="font-bold text-gray-300">Analysis</h4>
+                    <p id="team-analysis" class="text-sm text-gray-400 mt-2">
+                        Click on a team in the table to see how likely they are to hit specific point totals.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let distChart = null; // Chart instance
+        let allDistributions = {}; // Store data
+
+        // Load All Data
+        Promise.all([
+            fetch('/static/data/leaderboard.json').then(r => r.json()),
+            fetch('/static/data/qualification_probs.json').then(r => r.json()),
+            fetch('/static/data/team_distributions.json').then(r => r.json()),
+            fetch('/static/data/insights.json').then(r => r.json())
+        ]).then(([leaderboard, probs, distributions, insights]) => {
+            
+            allDistributions = distributions;
+            renderInsights(insights);
+            renderTable(leaderboard, probs);
+
+            // Initialize empty chart
+            initChart();
+        });
+
+        function renderInsights(insights) {
+            const container = document.getElementById('insights-grid');
+            insights.forEach(item => {
+                const colorMap = {
+                    "blue": "border-blue-500 text-blue-400",
+                    "yellow": "border-yellow-500 text-yellow-400",
+                    "red": "border-red-500 text-red-400",
+                    "orange": "border-orange-500 text-orange-400"
+                };
+                const div = document.createElement('div');
+                div.className = `p-4 bg-gray-800 rounded-lg border-l-4 ${colorMap[item.color] || 'border-gray-500'} shadow`;
+                div.innerHTML = `
+                    <h4 class="text-gray-400 text-xs uppercase font-bold">${item.title}</h4>
+                    <div class="text-2xl font-bold text-white my-1">${item.value}</div>
+                    <p class="text-gray-500 text-sm leading-tight">${item.desc}</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderTable(leaderboard, probs) {
+            const tbody = document.getElementById('leaderboard-body');
+            leaderboard.sort((a, b) => b.AvgPoints - a.AvgPoints);
+
+            leaderboard.forEach((row, index) => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700 cursor-pointer transition group";
+                tr.onclick = () => updateDetailView(row.Team);
+                
+                // Colors based on rank
+                let rankClass = "text-gray-400";
+                if (index < 8) rankClass = "text-emerald-400 font-bold";
+                else if (index < 24) rankClass = "text-yellow-400";
+                
+                // Get probs for this team
+                const p = probs[row.Team];
+                const top8 = (p['Top 8'] * 100).toFixed(1);
+                const top24 = ((p['Top 8'] + p['9-24']) * 100).toFixed(1);
+
+                tr.innerHTML = `
+                    <td class="p-3 ${rankClass}">#${index + 1}</td>
+                    <td class="p-3 font-medium group-hover:text-white">${row.Team}</td>
+                    <td class="p-3 text-right text-gray-300 font-mono">${row.AvgPoints.toFixed(2)}</td>
+                    <td class="p-3 text-right text-xs text-gray-400">${top8}%</td>
+                    <td class="p-3 text-right text-xs text-gray-400">${top24}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateDetailView(teamName) {
+            document.getElementById('selected-team-name').innerText = teamName;
+            
+            // Get distribution data
+            const dist = allDistributions[teamName]; // { "0": 0.01, "1": 0.02 ... }
+            const labels = Object.keys(dist).map(Number).sort((a,b)=>a-b);
+            const data = labels.map(l => dist[l]);
+
+            // Update Chart
+            distChart.data.labels = labels;
+            distChart.data.datasets[0].data = data;
+            distChart.data.datasets[0].label = `${teamName} Points Prob`;
+            distChart.update();
+
+            // Simple text analysis
+            const maxProbIndex = data.indexOf(Math.max(...data));
+            const likelyPoints = labels[maxProbIndex];
+            document.getElementById('team-analysis').innerHTML = `
+                Most likely outcome: <b class="text-white">${likelyPoints} points</b>.<br>
+                Based on 100,000 simulations.
+            `;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('distributionChart').getContext('2d');
+            distChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Probability',
+                        data: [],
+                        backgroundColor: 'rgba(52, 211, 153, 0.6)', // Emerald
+                        borderColor: 'rgba(52, 211, 153, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { display: false },
+                        x: { 
+                            ticks: { color: '#94a3b8' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

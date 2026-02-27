@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>UCL Predictor - Full Bracket</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f1f5f9; font-family: sans-serif; }
+        .bracket-scroll::-webkit-scrollbar { height: 8px; }
+        .bracket-scroll::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    </style>
+</head>
+<body class="p-6 max-w-7xl mx-auto relative">
+
+    <div id="matchupModal" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-800 border border-gray-600 rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            <h3 class="text-xl font-bold text-emerald-400 mb-4 text-center tracking-widest uppercase text-sm">Tale of the Tape</h3>
+            
+            <div class="flex justify-between items-center mb-6">
+                <div class="text-center w-5/12">
+                    <div id="modal-t1-name" class="font-bold text-white text-lg truncate">Team 1</div>
+                    <div id="modal-t1-elo" class="text-gray-400 text-sm font-mono mt-1">ELO: 0</div>
+                    <div id="modal-t1-prob" class="text-emerald-400 font-bold text-2xl mt-2">0%</div>
+                </div>
+                
+                <div class="text-center w-2/12 text-gray-500 font-black italic text-xl">VS</div>
+                
+                <div class="text-center w-5/12">
+                    <div id="modal-t2-name" class="font-bold text-white text-lg truncate">Team 2</div>
+                    <div id="modal-t2-elo" class="text-gray-400 text-sm font-mono mt-1">ELO: 0</div>
+                    <div id="modal-t2-prob" class="text-emerald-400 font-bold text-2xl mt-2">0%</div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 rounded-lg p-4 text-center border border-gray-700">
+                <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">ELO Difference</div>
+                <div id="modal-elo-diff" class="text-3xl font-black text-white">0</div>
+                <p id="modal-analysis" class="text-sm text-gray-400 mt-3"></p>
+            </div>
+            <div class="mt-5 pt-4 border-t border-gray-700">
+                <h4 class="text-center text-gray-500 text-xs font-bold uppercase tracking-widest mb-3">Most Likely Agg. Scores</h4>
+                <div id="modal-exact-scores" class="flex justify-center gap-4">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="flex space-x-4 mb-8">
+        <a href="/" class="px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition">League Phase</a>
+        <a href="/knockout" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-900/50">🏆 Full Bracket</a>
+    </nav>
+
+    <div class="text-center mb-10">
+        <h1 class="text-4xl font-bold text-yellow-400 mb-2">The Road to the Final</h1>
+        <p class="text-gray-400">Projected most likely path based on 10,000 simulations. <span class="text-white font-bold">Click any match for details.</span></p>
+    </div>
+
+    <div class="mb-12 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bracket-scroll overflow-x-auto pb-4">
+            <div class="flex justify-between items-stretch min-w-[1000px] h-[650px] gap-4">
+                <div class="flex flex-col justify-around w-48" id="r16-left"></div>
+                <div class="flex flex-col justify-around w-48 py-16" id="qf-left"></div>
+                <div class="flex flex-col justify-around w-48 py-32" id="sf-left"></div>
+                <div class="flex flex-col justify-center items-center w-56" id="final-match"></div>
+                <div class="flex flex-col justify-around w-48 py-32" id="sf-right"></div>
+                <div class="flex flex-col justify-around w-48 py-16" id="qf-right"></div>
+                <div class="flex flex-col justify-around w-48" id="r16-right"></div>
+            </div>
+        </div>
+    </div>
+    <div class="mb-12 bg-gray-800 p-8 rounded-xl border border-indigo-500/30 shadow-[0_0_15px_rgba(79,70,229,0.2)]">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold text-indigo-400 mb-1">🔮 The "What-If" Matchup Machine</h2>
+            <p class="text-gray-400 text-sm">Select any two teams to see who would win a hypothetical 2-legged tie.</p>
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-center items-center gap-6 mb-8">
+            <select id="team1-select" class="bg-gray-900 border border-gray-600 text-white text-lg rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full md:w-64 p-3 outline-none">
+                <option value="" disabled selected>Select Team 1...</option>
+            </select>
+            
+            <span class="text-gray-500 font-black italic text-2xl">VS</span>
+            
+            <select id="team2-select" class="bg-gray-900 border border-gray-600 text-white text-lg rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full md:w-64 p-3 outline-none">
+                <option value="" disabled selected>Select Team 2...</option>
+            </select>
+            
+            <button onclick="runWhatIf()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-200">
+                Simulate Match
+            </button>
+        </div>
+
+        <div id="whatif-results" class="hidden bg-gray-900 rounded-lg p-6 border border-gray-700 max-w-2xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <div class="text-center w-5/12">
+                    <div id="wi-t1-name" class="font-bold text-white text-2xl truncate">Team 1</div>
+                    <div id="wi-t1-prob" class="text-indigo-400 font-black text-4xl mt-2">0%</div>
+                </div>
+                <div class="text-center w-2/12 text-gray-600 text-sm tracking-widest uppercase">Win Chance</div>
+                <div class="text-center w-5/12">
+                    <div id="wi-t2-name" class="font-bold text-white text-2xl truncate">Team 2</div>
+                    <div id="wi-t2-prob" class="text-indigo-400 font-black text-4xl mt-2">0%</div>
+                </div>
+            </div>
+            
+            <div class="h-3 flex w-full rounded-full overflow-hidden mb-6 bg-gray-800">
+                <div id="wi-bar-1" class="bg-indigo-500 h-full transition-all duration-700" style="width: 50%"></div>
+                <div id="wi-bar-2" class="bg-gray-600 h-full transition-all duration-700" style="width: 50%"></div>
+            </div>
+
+            <div class="text-center">
+                <p id="wi-analysis" class="text-gray-300"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="lg:col-span-2 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+            <h2 class="text-2xl font-bold mb-6 text-white text-center">Title Contenders</h2>
+            <div class="relative h-[400px]">
+                <canvas id="winnerChart"></canvas>
+            </div>
+        </div>
+        <div class="lg:col-span-1 bg-gray-800 p-6 rounded-xl border border-gray-700 h-fit">
+            <h2 class="text-xl font-bold mb-4 text-blue-400">Survival Chances</h2>
+            <div class="overflow-y-auto max-h-[500px]">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-700 text-gray-300 sticky top-0">
+                        <tr>
+                            <th class="p-3">Team</th><th class="p-3 text-right">QF</th><th class="p-3 text-right">Semi</th><th class="p-3 text-right">Final</th><th class="p-3 text-right text-yellow-400">Win</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stats-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const r16Draw = [
+            ["PSG", "Chelsea"], ["Galatasaray", "Liverpool"], ["Real Madrid", "Man City"], ["Atalanta", "Bayern"],
+            ["Newcastle", "Barcelona"], ["Atletico", "Tottenham"], ["Bodo/Glimt", "Sporting CP"], ["Leverkusen", "Arsenal"]
+        ];
+
+        // Global variables so our modal functions can access them
+        let h2hDataGlobal = {};
+        let eloDataGlobal = {};
+        let scoreDataGlobal = {};
+
+        // Fetch ALL THREE JSON files
+        Promise.all([
+            fetch('/static/data/winner_predictions.json').then(r => r.json()),
+            fetch('/static/data/h2h_matrix.json').then(r => r.json()),
+            fetch('/static/data/team_elo.json').then(r => r.json()),
+            fetch('/static/data/exact_scores.json').then(r => r.json())
+        ]).then(([data, h2hData, eloData, scoreData]) => {
+            
+            h2hDataGlobal = h2hData;
+            eloDataGlobal = eloData;
+            scoreDataGlobal = scoreData;
+            
+            // --- POPULATE WHAT-IF DROPDOWNS (MOVED HERE!) ---
+            const teamNames = Object.keys(eloData).sort();
+            const select1 = document.getElementById('team1-select');
+            const select2 = document.getElementById('team2-select');
+            teamNames.forEach(team => {
+                select1.innerHTML += `<option value="${team}">${team}</option>`;
+                select2.innerHTML += `<option value="${team}">${team}</option>`;
+            });
+
+            function buildMatchCard(t1, t2) {
+                const p1 = h2hData[t1][t2] || 0;
+                const p2 = h2hData[t2][t1] || 0;
+                
+                const t1Wins = p1 >= p2;
+                const winner = t1Wins ? t1 : t2;
+
+                const t1Class = t1Wins ? "text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]" : "text-gray-400 text-sm";
+                const t2Class = !t1Wins ? "text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]" : "text-gray-400 text-sm";
+
+                // ADDED: onclick="openModal('Team1', 'Team2')" and cursor-pointer hover effects
+                const html = `
+                    <div onclick="openModal('${t1}', '${t2}')" class="bg-gray-900 border border-gray-700 rounded-md p-3 shadow-lg relative z-10 w-full cursor-pointer hover:border-emerald-500 hover:scale-105 transition-all duration-200">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="${t1Class} truncate w-3/4">${t1}</span>
+                            <span class="text-xs text-gray-500">${p1.toFixed(0)}%</span>
+                        </div>
+                        <div class="border-b border-gray-700 mb-1"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="${t2Class} truncate w-3/4">${t2}</span>
+                            <span class="text-xs text-gray-500">${p2.toFixed(0)}%</span>
+                        </div>
+                    </div>
+                `;
+                return { html, winner };
+            }
+
+            // --- BRACKET GENERATION ---
+            const r16Left = document.getElementById('r16-left');
+            const r16Right = document.getElementById('r16-right');
+            const qfTeams = [];
+
+            r16Draw.forEach((match, index) => {
+                const result = buildMatchCard(match[0], match[1]);
+                qfTeams.push(result.winner);
+                if (index < 4) r16Left.innerHTML += result.html; else r16Right.innerHTML += result.html;
+            });
+
+            const qfLeft = document.getElementById('qf-left');
+            const qfRight = document.getElementById('qf-right');
+            const sfTeams = [];
+            for (let i = 0; i < 8; i += 2) {
+                const result = buildMatchCard(qfTeams[i], qfTeams[i+1]);
+                sfTeams.push(result.winner);
+                if (i < 4) qfLeft.innerHTML += result.html; else qfRight.innerHTML += result.html;
+            }
+
+            const sfLeft = document.getElementById('sf-left');
+            const sfRight = document.getElementById('sf-right');
+            const finalists = [];
+            for (let i = 0; i < 4; i += 2) {
+                const result = buildMatchCard(sfTeams[i], sfTeams[i+1]);
+                finalists.push(result.winner);
+                if (i === 0) sfLeft.innerHTML += result.html; else sfRight.innerHTML += result.html;
+            }
+
+            const finalContainer = document.getElementById('final-match');
+            const finalResult = buildMatchCard(finalists[0], finalists[1]);
+            finalContainer.innerHTML = `
+                <div class="text-center mb-4 text-6xl drop-shadow-2xl">🏆</div>
+                <div class="w-full transform scale-110">${finalResult.html}</div>
+                <div class="mt-4 text-center"><span class="bg-yellow-500 text-black font-black px-4 py-1 rounded text-sm uppercase tracking-widest">Projected Champion</span></div>
+            `;
+
+            // --- RENDER CHART & TABLE ---
+            const teams = Object.keys(data).map(name => ({ name, ...data[name] })).sort((a, b) => b.Winner - a.Winner);
+            const topTeams = teams.slice(0, 8);
+            const ctx = document.getElementById('winnerChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: topTeams.map(t => t.name),
+                    datasets: [{
+                        data: topTeams.map(t => t.Winner),
+                        backgroundColor: ['#fbbf24', '#f59e0b', '#d97706', '#b45309', '#3b82f6', '#2563eb', '#1d4ed8', '#1e40af'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                    scales: { y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }, x: { ticks: { color: '#e5e7eb', font: { weight: 'bold' } }, grid: { display: false } } }
+                }
+            });
+
+            const tbody = document.getElementById('stats-body');
+            teams.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-gray-700 hover:bg-gray-700 transition";
+                tr.innerHTML = `<td class="p-3 font-medium text-white">${t.name}</td><td class="p-3 text-right text-gray-400">${t.QF}%</td><td class="p-3 text-right text-gray-400">${t.SF}%</td><td class="p-3 text-right text-gray-200">${t.Final}%</td><td class="p-3 text-right font-bold text-yellow-400">${t.Winner}%</td>`;
+                tbody.appendChild(tr);
+            });
+        });
+
+        // --- MODAL LOGIC ---
+        function openModal(t1, t2) {
+            const e1 = eloDataGlobal[t1];
+            const e2 = eloDataGlobal[t2];
+            const p1 = h2hDataGlobal[t1][t2];
+            const p2 = h2hDataGlobal[t2][t1];
+            const diff = Math.abs(e1 - e2);
+            
+            // Populate Data
+            document.getElementById('modal-t1-name').innerText = t1;
+            document.getElementById('modal-t1-elo').innerText = `ELO: ${e1}`;
+            document.getElementById('modal-t1-prob').innerText = `${p1.toFixed(1)}%`;
+            
+            document.getElementById('modal-t2-name').innerText = t2;
+            document.getElementById('modal-t2-elo').innerText = `ELO: ${e2}`;
+            document.getElementById('modal-t2-prob').innerText = `${p2.toFixed(1)}%`;
+            
+            document.getElementById('modal-elo-diff').innerText = diff;
+
+            // Generate intelligent analysis text based on ELO gap
+            let analysis = "";
+            let favorite = e1 > e2 ? t1 : t2;
+            
+            if (diff < 40) {
+                analysis = "Toss-up! These teams are incredibly evenly matched. This tie could easily go to penalties.";
+            } else if (diff < 120) {
+                analysis = `Solid advantage for ${favorite}. They are the better side, but an upset is entirely possible over two legs.`;
+            } else if (diff < 250) {
+                analysis = `Heavy favorite. ${favorite} should comfortably advance unless they suffer a complete collapse.`;
+            } else {
+                analysis = `Massive mismatch. It would require a historic miracle for the underdog to survive this tie.`;
+            }
+            
+            document.getElementById('modal-analysis').innerText = analysis;
+            
+            // --- RENDER EXACT SCORES IN MODAL ---
+            const topScores = scoreDataGlobal[t1][t2];
+            const scoresContainer = document.getElementById('modal-exact-scores');
+            scoresContainer.innerHTML = ''; // Clear previous scores
+            
+            if (topScores) {
+                topScores.forEach(item => {
+                    scoresContainer.innerHTML += `
+                        <div class="bg-gray-800 border border-emerald-500/30 rounded py-2 px-4 text-center shadow-lg w-24">
+                            <div class="text-white font-bold text-xl tracking-widest">${item.score}</div>
+                            <div class="text-emerald-400 text-[11px] font-bold uppercase mt-1">${item.prob}%</div>
+                        </div>
+                    `;
+                });
+            }
+            // Show Modal
+            document.getElementById('matchupModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('matchupModal').classList.add('hidden');
+        }
+        // --- WHAT-IF MACHINE LOGIC ---
+        function runWhatIf() {
+            const t1 = document.getElementById('team1-select').value;
+            const t2 = document.getElementById('team2-select').value;
+            const resultsDiv = document.getElementById('whatif-results');
+
+            if (!t1 || !t2) {
+                alert("Please select two teams!");
+                return;
+            }
+            if (t1 === t2) {
+                alert("A team cannot play itself! Please select two different teams.");
+                return;
+            }
+
+            // Get Data
+            const p1 = h2hDataGlobal[t1][t2];
+            const p2 = h2hDataGlobal[t2][t1];
+            const e1 = eloDataGlobal[t1];
+            const e2 = eloDataGlobal[t2];
+            const diff = Math.abs(e1 - e2);
+
+            // Update UI
+            document.getElementById('wi-t1-name').innerText = t1;
+            document.getElementById('wi-t1-prob').innerText = `${p1.toFixed(1)}%`;
+            document.getElementById('wi-t2-name').innerText = t2;
+            document.getElementById('wi-t2-prob').innerText = `${p2.toFixed(1)}%`;
+
+            // Update Bar
+            document.getElementById('wi-bar-1').style.width = `${p1}%`;
+            document.getElementById('wi-bar-2').style.width = `${p2}%`;
+
+            // Generate Analysis
+            let analysis = "";
+            let favorite = p1 > p2 ? t1 : t2;
+            
+            if (diff < 40) {
+                analysis = `🔥 <b>Absolute Toss-up!</b> With an ELO difference of only ${diff} points, this tie is incredibly tight. Expect this to go down to the wire.`;
+            } else if (diff < 120) {
+                analysis = `⚔️ <b>Competitive Tie.</b> ${favorite} is the favorite here, but it's close enough that a tactical masterclass or a bit of luck could easily cause an upset.`;
+            } else if (diff < 250) {
+                analysis = `🛡️ <b>Clear Favorite.</b> ${favorite} dominates this matchup on paper. The underdog would need a near-perfect performance over two legs to survive.`;
+            } else {
+                analysis = `🚨 <b>David vs Goliath.</b> A massive ${diff} point ELO gap. ${favorite} advancing is almost a mathematical certainty.`;
+            }
+
+            document.getElementById('wi-analysis').innerHTML = analysis;
+            
+            // Show the results box
+            resultsDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
